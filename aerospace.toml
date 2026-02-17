@@ -1,0 +1,226 @@
+# Aerospace config for 3-monitor setup
+# Top-left 4K: Coding | Top-right 4K: Debug/Simulator | Laptop: Productivity
+# Docs: https://nikitabobko.github.io/AeroSpace/guide
+
+config-version = 2
+start-at-login = true
+
+# Normalizations - disabled for manual layout control (quads, custom splits)
+enable-normalization-flatten-containers = false
+enable-normalization-opposite-orientation-for-nested-containers = false
+
+# Mouse follows focus when switching monitors
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+# Notify sketchybar on any workspace change
+exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger aerospace_workspace_change AEROSPACE_FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE']
+
+# Mode change handled in keybindings directly
+
+# Keep workspaces alive even when empty
+persistent-workspaces = ['C', 'D', 'W', 'B', 'T', 'N', 'S', 'M', 'P', 'Q', 'Y']
+
+# ========== MONITOR ASSIGNMENT ==========
+# 1 = Dev (top-left 4K)
+# 2 = Debug/Xcode/Simulator (top-right 4K)  
+# 3 = Slack (laptop)
+# 4 = Kanban (laptop)
+# 5 = Notes (laptop)
+#
+# Adjust monitor numbers if left/right are swapped!
+# [workspace-to-monitor-force-assignment]
+# Uncomment and configure if you want specific workspaces on specific monitors
+
+# ========== APP RULES ==========
+# C = Code
+[[on-window-detected]]
+if.app-id = 'com.microsoft.VSCode'
+run = ['move-node-to-workspace C']
+
+# T = Terminal
+[[on-window-detected]]
+if.app-id = 'com.apple.Terminal'
+run = ['move-node-to-workspace T']
+
+[[on-window-detected]]
+if.app-id = 'com.googlecode.iterm2'
+run = ['move-node-to-workspace T']
+
+# D = Debug
+[[on-window-detected]]
+if.app-id = 'com.apple.iphonesimulator'
+run = ['layout tiling', 'move-node-to-workspace D']
+
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.nkffbedfbodgigofpofbjjljcfnkmjbd'
+run = ['move-node-to-workspace D']
+# App Inspector
+
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.nlglegpjillngfijdnlcnlbbpfmkcpmn'
+run = ['move-node-to-workspace D']
+# Mock Server
+
+# W = Web
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome'
+run = ['move-node-to-workspace W']
+
+# S = Slack
+[[on-window-detected]]
+if.app-id = 'com.tinyspeck.slackmacgap'
+run = ['move-node-to-workspace S']
+
+# N = Notes
+[[on-window-detected]]
+if.app-id = 'md.obsidian'
+run = ['move-node-to-workspace N']
+
+# B = Board (Kanban)
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.afpppjliigpcejdmogakhknfdanjbbon'
+run = ['move-node-to-workspace B']
+
+# M = Meetings
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.fmgjjmmmlfnkbppncabfkddbjimcfncm'
+run = ['move-node-to-workspace M']
+# Gmail
+
+[[on-window-detected]]
+if.app-id = 'com.apple.iCal'
+run = ['move-node-to-workspace M']
+
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.kjbdgfilnfhdoflbpgamdcdgpehopbep'
+run = ['move-node-to-workspace M']
+# Google Calendar
+
+# Y = YouTube Music
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod'
+run = ['move-node-to-workspace Y']
+
+# Y = Google Voice (also on Music workspace)
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome.app.bbcbahpbnakjldhdcgiblnjnfgaejidg'
+run = ['move-node-to-workspace Y']
+
+# P = 1Password
+[[on-window-detected]]
+if.app-id = 'com.1password.1password'
+run = ['move-node-to-workspace P']
+
+# ========== GAPS ==========
+[gaps]
+inner.horizontal = 4
+inner.vertical = 4
+outer.left = 4
+outer.bottom = 4
+outer.right = 4
+outer.top = 40           # Space for sketchybar
+
+# ========== MAIN KEYBINDINGS ==========
+[mode.main.binding]
+
+# === WORKSPACE SWITCHING ===
+# C = Code
+# D = Debug (mobile)
+# W = web
+# T = terminal
+# N = notes
+# S = slack
+# M = meetings
+# B = board (kanban)
+# Y = youtube music
+# P = password (1Password)
+# Q = quick (screenshare scratch)
+alt-c = 'workspace C'
+alt-d = 'workspace D'
+alt-b = 'workspace B'
+alt-t = 'workspace T'
+alt-n = 'workspace N'
+alt-s = 'workspace S'
+alt-m = 'workspace M'
+alt-w = 'workspace W'
+alt-y = 'workspace Y'
+alt-p = 'workspace P'
+alt-q = 'workspace Q'
+
+# Move window to workspace
+alt-shift-c = 'move-node-to-workspace C'
+alt-shift-d = 'move-node-to-workspace D'
+alt-shift-b = 'move-node-to-workspace B'
+alt-shift-t = 'move-node-to-workspace T'
+alt-shift-n = 'move-node-to-workspace N'
+alt-shift-s = 'move-node-to-workspace S'
+alt-shift-m = 'move-node-to-workspace M'
+alt-shift-w = 'move-node-to-workspace W'
+alt-shift-y = 'move-node-to-workspace Y'
+alt-shift-p = 'move-node-to-workspace P'
+alt-shift-q = 'move-node-to-workspace Q'
+
+# === WINDOW FOCUS (vim-style) ===
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+# Arrow keys also work
+alt-left = 'focus left'
+alt-down = 'focus down'
+alt-up = 'focus up'
+alt-right = 'focus right'
+
+# === WINDOW MOVEMENT ===
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+# === RESIZE ===
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+
+# === LAYOUT ===
+alt-slash = 'layout tiles horizontal vertical'
+alt-comma = 'layout accordion horizontal vertical'
+alt-f = 'fullscreen'
+alt-shift-f = 'layout floating tiling'
+alt-shift-equal = 'balance-sizes'
+
+# === MONITORS ===
+alt-tab = 'focus-monitor --wrap-around next'
+alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+
+# === RECTANGLE-STYLE SHORTCUTS ===
+ctrl-alt-left = 'move left'
+ctrl-alt-right = 'move right'
+ctrl-alt-up = 'move up'
+ctrl-alt-down = 'move down'
+ctrl-alt-enter = 'fullscreen'
+ctrl-alt-f = 'fullscreen'
+ctrl-alt-equal = 'balance-sizes'
+ctrl-alt-slash = 'layout tiles horizontal vertical'
+ctrl-alt-s = 'split horizontal'
+ctrl-alt-v = 'split vertical'
+ctrl-alt-t = 'layout floating tiling'
+ctrl-alt-shift-left = 'resize width -100'
+ctrl-alt-shift-right = 'resize width +100'
+ctrl-alt-shift-up = 'resize height -100'
+ctrl-alt-shift-down = 'resize height +100'
+
+# === SERVICE MODE ===
+alt-shift-semicolon = ['mode service', 'exec-and-forget sketchybar --trigger aerospace_mode_change AEROSPACE_MODE=service']
+
+# ========== SERVICE MODE ==========
+[mode.service.binding]
+esc = ['reload-config', 'mode main', 'exec-and-forget sketchybar --trigger aerospace_mode_change AEROSPACE_MODE=main']
+r = ['flatten-workspace-tree', 'mode main']
+f = ['layout floating tiling', 'mode main']
+backspace = ['close-all-windows-but-current', 'mode main']
+
+alt-shift-h = ['join-with left', 'mode main']
+alt-shift-j = ['join-with down', 'mode main']
+alt-shift-k = ['join-with up', 'mode main']
+alt-shift-l = ['join-with right', 'mode main']

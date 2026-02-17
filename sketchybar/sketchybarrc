@@ -1,0 +1,52 @@
+#!/bin/bash
+
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+ITEM_DIR="$CONFIG_DIR/items"
+# Resolve through symlinks so config.sh is found in the actual repo
+DOTFILES_DIR="$(cd -P "$CONFIG_DIR/.." && pwd -P)"
+
+# Load config (defaults if missing)
+if [ -f "$DOTFILES_DIR/config.sh" ]; then
+  source "$DOTFILES_DIR/config.sh"
+else
+  ENABLE_AEROSPACE=true
+  ENABLE_EMAIL=true
+  ENABLE_CLAUDE_USAGE=true
+  ENABLE_SLACK=true
+  ENABLE_CALENDAR=true
+  ENABLE_MEDIA=true
+  ENABLE_SYSTEM=true
+fi
+
+source "$CONFIG_DIR/colors.sh"
+source "$CONFIG_DIR/bar.sh"
+source "$CONFIG_DIR/defaults.sh"
+
+# Load a built-in item if its ENABLE_ var is true
+load_item() {
+  local var="ENABLE_$(echo "$1" | tr '[:lower:]' '[:upper:]')"
+  [ "${!var}" = "true" ] && source "$ITEM_DIR/${1}.item.sh"
+}
+
+load_item aerospace
+load_item email
+load_item slack
+load_item calendar
+load_item claude_usage
+load_item system
+load_item media
+
+# Load enabled plugins from external directories
+# ENABLED_PLUGINS controls which plugins are loaded; PLUGIN_ITEM_DIR is set so
+# the item can reference its own scripts (e.g., script="$PLUGIN_ITEM_DIR/plugin.sh")
+for plugin_name in ${ENABLED_PLUGINS:-}; do
+  for plugin_base in ${PLUGIN_DIRS:-}; do
+    plugin_dir="$plugin_base/$plugin_name"
+    if [ -f "$plugin_dir/item.sh" ]; then
+      PLUGIN_ITEM_DIR="$plugin_dir" source "$plugin_dir/item.sh"
+      break
+    fi
+  done
+done
+
+sketchybar --update

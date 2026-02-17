@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Usage</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .container { max-width: 480px; width: 100%; }
+  h1 { font-size: 20px; font-weight: 600; color: #e6edf3; margin-bottom: 20px; }
+  h2 { font-size: 15px; font-weight: 600; color: #e6edf3; margin-bottom: 12px; }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-valid { background: #0d3117; color: #3fb950; border: 1px solid #238636; }
+  .badge-expired { background: #3d1117; color: #ff6b6b; border: 1px solid #da3633; }
+  .badge-not-configured { background: #2d1b00; color: #d29922; border: 1px solid #9e6a03; }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 13px; color: #8b949e; }
+  .stat-value { font-size: 14px; font-weight: 600; color: #e6edf3; }
+
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #21262d;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  .progress-green { background: #3fb950; }
+  .progress-yellow { background: #d29922; }
+  .progress-red { background: #f85149; }
+
+  .window-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .window-item:last-child { border-bottom: none; }
+  .window-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .window-name { font-size: 13px; color: #8b949e; }
+  .window-util { font-size: 13px; font-weight: 600; }
+
+  label { font-size: 13px; color: #8b949e; display: block; margin-bottom: 4px; }
+  textarea, input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-size: 13px;
+    resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+  textarea { min-height: 80px; }
+
+  .btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+  .btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+  .btn-secondary:hover { background: #30363d; }
+
+  .form-group { margin-bottom: 12px; }
+  .form-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  .alert {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .alert-error { background: #3d1117; color: #ff6b6b; border: 1px solid #da3633; }
+  .alert-success { background: #0d3117; color: #3fb950; border: 1px solid #238636; }
+
+  .hint {
+    font-size: 12px;
+    color: #484f58;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .hint code {
+    background: #21262d;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .toggle-btn {
+    background: none;
+    border: none;
+    color: #58a6ff;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .toggle-btn:hover { text-decoration: underline; }
+
+  .hidden { display: none; }
+
+  .fetched-at {
+    font-size: 11px;
+    color: #484f58;
+    text-align: right;
+    margin-top: 8px;
+  }
+
+  .oauth-steps {
+    counter-reset: step;
+  }
+  .oauth-step {
+    padding: 10px 0;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .oauth-step:last-child { border-bottom: none; }
+  .step-num {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    background: #21262d;
+    color: #8b949e;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-num.active { background: #238636; color: #fff; }
+  .step-content { flex: 1; font-size: 13px; color: #8b949e; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Claude Usage</h1>
+
+  <div id="alert" class="hidden"></div>
+
+  <!-- Usage Card -->
+  <div id="usage-card" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin-bottom:0;">Usage</h2>
+      <span id="token-badge" class="status-badge"></span>
+    </div>
+    <div id="windows-list"></div>
+    <div id="fetched-at" class="fetched-at"></div>
+  </div>
+
+  <!-- Auth Card -->
+  <div id="auth-card" class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 id="auth-heading" style="margin-bottom:0;">Authorize</h2>
+      <button id="toggle-auth" class="toggle-btn hidden" onclick="toggleAuth()">Re-authorize</button>
+    </div>
+
+    <div id="auth-form">
+      <div class="oauth-steps">
+        <div class="oauth-step">
+          <span class="step-num active">1</span>
+          <div class="step-content">
+            <button class="btn btn-primary" id="auth-btn" onclick="startOAuth()">Authorize with Claude</button>
+            <div class="hint">Opens claude.ai in your browser to authorize access.</div>
+          </div>
+        </div>
+        <div class="oauth-step">
+          <span class="step-num" id="step2-num">2</span>
+          <div class="step-content">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="auth-code">Paste the code from the browser</label>
+              <textarea id="auth-code" placeholder="Paste the full code here (includes #state)..." disabled></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="oauth-step">
+          <span class="step-num" id="step3-num">3</span>
+          <div class="step-content">
+            <button class="btn btn-primary" id="complete-btn" onclick="completeOAuth()" disabled>Complete Setup</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let authVisible = true;
+  let tokenConfigured = false;
+
+  async function loadStatus() {
+    try {
+      const [statusRes, usageRes] = await Promise.all([
+        fetch('/api/status'),
+        fetch('/api/usage'),
+      ]);
+      const status = await statusRes.json();
+      const usage = await usageRes.json();
+
+      const card = document.getElementById('usage-card');
+      const badge = document.getElementById('token-badge');
+
+      if (status.tokenHealth === 'not_configured') {
+        card.classList.add('hidden');
+        showAuth(true);
+        return;
+      }
+
+      tokenConfigured = true;
+
+      badge.textContent = status.tokenHealth;
+      badge.className = 'status-badge badge-' + status.tokenHealth.replace(/_/g, '-');
+
+      if (status.tokenHealth === 'expired') {
+        showAuth(true);
+        document.getElementById('auth-heading').textContent = 'Token Expired';
+      } else {
+        showAuth(false);
+        document.getElementById('toggle-auth').classList.remove('hidden');
+      }
+
+      // Render usage windows
+      const list = document.getElementById('windows-list');
+      list.innerHTML = '';
+
+      if (usage.data) {
+        for (const [key, value] of Object.entries(usage.data)) {
+          if (!value || typeof value !== 'object' || !('utilization' in value)) continue;
+
+          const remaining = Math.round(value.utilization);
+          const colorClass = remaining >= 85 ? 'progress-red' : remaining >= 50 ? 'progress-yellow' : 'progress-green';
+          const color = remaining >= 85 ? '#f85149' : remaining >= 50 ? '#d29922' : '#3fb950';
+
+          let resetText = '';
+          if (value.resets_at) {
+            const mins = Math.max(0, Math.round((new Date(value.resets_at).getTime() - Date.now()) / 60000));
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            const resetDate = new Date(value.resets_at);
+            const now = new Date();
+            const isToday = resetDate.toDateString() === now.toDateString();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const isTomorrow = resetDate.toDateString() === tomorrow.toDateString();
+            const timeStr = resetDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            let dateTimeStr;
+            if (isToday) {
+              dateTimeStr = timeStr;
+            } else if (isTomorrow) {
+              dateTimeStr = 'tomorrow ' + timeStr;
+            } else {
+              dateTimeStr = resetDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + timeStr;
+            }
+            resetText = ' · resets ' + (h > 0 ? h + 'h ' + m + 'm' : m + 'm') + ' (' + dateTimeStr + ')';
+          }
+
+          const item = document.createElement('div');
+          item.className = 'window-item';
+          item.innerHTML = '<div class="window-header">' +
+            '<span class="window-name">' + formatWindowName(key) + resetText + '</span>' +
+            '<span class="window-util" style="color:' + color + '">' + remaining + '%</span>' +
+            '</div>' +
+            '<div class="progress-bar"><div class="progress-fill ' + colorClass + '" style="width:' + remaining + '%"></div></div>';
+          list.appendChild(item);
+        }
+      }
+
+      if (status.fetchedAt) {
+        const ago = Math.round((Date.now() - new Date(status.fetchedAt).getTime()) / 1000);
+        document.getElementById('fetched-at').textContent = 'Updated ' + (ago < 60 ? ago + 's ago' : Math.round(ago / 60) + 'm ago');
+      }
+
+      card.classList.remove('hidden');
+    } catch (err) {
+      showAlert('Failed to connect to server: ' + err.message, 'error');
+    }
+  }
+
+  function formatWindowName(name) {
+    if (!name) return '--';
+    return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function showAuth(show) {
+    authVisible = show;
+    const form = document.getElementById('auth-form');
+    if (show) {
+      form.classList.remove('hidden');
+    } else {
+      form.classList.add('hidden');
+    }
+  }
+
+  function toggleAuth() {
+    showAuth(!authVisible);
+  }
+
+  async function startOAuth() {
+    const btn = document.getElementById('auth-btn');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    clearAlert();
+
+    try {
+      const res = await fetch('/api/oauth/start', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.authorizeUrl) {
+        window.open(data.authorizeUrl, '_blank');
+
+        // Activate step 2
+        document.getElementById('step2-num').classList.add('active');
+        document.getElementById('auth-code').disabled = false;
+        document.getElementById('auth-code').focus();
+        document.getElementById('step3-num').classList.add('active');
+        document.getElementById('complete-btn').disabled = false;
+
+        btn.textContent = 'Opened in browser';
+      } else {
+        showAlert('Failed to start OAuth flow', 'error');
+      }
+    } catch (err) {
+      showAlert('Error: ' + err.message, 'error');
+    } finally {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = 'Authorize with Claude';
+      }, 3000);
+    }
+  }
+
+  async function completeOAuth() {
+    const btn = document.getElementById('complete-btn');
+    const code = document.getElementById('auth-code').value.trim();
+
+    if (!code) {
+      showAlert('Please paste the code from the browser', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Exchanging...';
+    clearAlert();
+
+    try {
+      const res = await fetch('/api/oauth/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert(data.error || 'Failed to complete authorization', 'error');
+        return;
+      }
+
+      showAlert('Authorized successfully!', 'success');
+      document.getElementById('auth-code').value = '';
+
+      setTimeout(loadStatus, 1500);
+    } catch (err) {
+      showAlert('Error: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Complete Setup';
+    }
+  }
+
+  function showAlert(msg, type) {
+    const el = document.getElementById('alert');
+    el.textContent = msg;
+    el.className = 'alert alert-' + type;
+  }
+
+  function clearAlert() {
+    const el = document.getElementById('alert');
+    el.className = 'hidden';
+  }
+
+  // Initial load + auto-refresh
+  loadStatus();
+  setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>
