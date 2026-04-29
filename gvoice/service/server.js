@@ -8,6 +8,9 @@ const PORT = parseInt(process.env.PORT || '3024', 10);
 const BIND = process.env.BIND || '127.0.0.1';
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '60000', 10);
 const PEEKABOO_PATH = process.env.PEEKABOO_PATH || '/opt/homebrew/bin/peekaboo';
+// peekaboo `see` always saves a screenshot. Pin it to a single file in /tmp so
+// it gets overwritten each poll instead of piling up on the Desktop.
+const SNAPSHOT_PATH = process.env.SNAPSHOT_PATH || '/tmp/canopy-gvoice-snapshot.png';
 
 const startTime = Date.now();
 let gvoiceCache = { messages: 0, calls: 0, voicemail: 0, spam: 0 };
@@ -66,7 +69,7 @@ function parsePeekabooOutput(stdout) {
 function fetchGvoice() {
   execFile(
     PEEKABOO_PATH,
-    ['see', '--app', 'Google Voice', '--json'],
+    ['see', '--app', 'Google Voice', '--json', '--path', SNAPSHOT_PATH],
     { timeout: 15000, maxBuffer: 32 * 1024 * 1024 },
     (err, stdout, stderr) => {
       if (err) {
