@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Usage</title>
+<title>Model Usage</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -190,18 +190,28 @@
 </head>
 <body>
 <div class="container">
-  <h1>Claude Usage</h1>
+  <h1>Model Usage</h1>
 
   <div id="alert" class="hidden"></div>
 
-  <!-- Usage Card -->
+  <!-- Claude Usage Card -->
   <div id="usage-card" class="card hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 style="margin-bottom:0;">Usage</h2>
+      <h2 style="margin-bottom:0;">Claude</h2>
       <span id="token-badge" class="status-badge"></span>
     </div>
     <div id="windows-list"></div>
     <div id="fetched-at" class="fetched-at"></div>
+  </div>
+
+  <!-- OpenAI / Codex Usage Card -->
+  <div id="openai-card" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="margin-bottom:0;">OpenAI (Codex)</h2>
+      <span id="openai-badge" class="status-badge"></span>
+    </div>
+    <div id="openai-windows-list"></div>
+    <div id="openai-fetched-at" class="fetched-at"></div>
   </div>
 
   <!-- Auth Card -->
@@ -275,49 +285,31 @@
         document.getElementById('toggle-auth').classList.remove('hidden');
       }
 
-      // Render usage windows
+      // Render usage windows — prefer the labeled `limits[]` array (has
+      // per-model scoped windows, e.g. a weekly limit scoped to "Fable"),
+      // falling back to the raw per-key utilization fields if it's absent.
       const list = document.getElementById('windows-list');
       list.innerHTML = '';
 
-      if (usage.data) {
+      if (usage.data && Array.isArray(usage.data.limits) && usage.data.limits.length) {
+        for (const item of usage.data.limits) {
+          if (typeof item.percent !== 'number') continue;
+          renderWindowItem(list, {
+            name: claudeLimitLabel(item),
+            percent: item.percent,
+            resetsAt: item.resets_at,
+            severity: item.severity,
+            inactive: item.is_active === false,
+          });
+        }
+      } else if (usage.data) {
         for (const [key, value] of Object.entries(usage.data)) {
           if (!value || typeof value !== 'object' || !('utilization' in value)) continue;
-
-          const remaining = Math.round(value.utilization);
-          const colorClass = remaining >= 85 ? 'progress-red' : remaining >= 50 ? 'progress-yellow' : 'progress-green';
-          const color = remaining >= 85 ? '#f85149' : remaining >= 50 ? '#d29922' : '#3fb950';
-
-          let resetText = '';
-          if (value.resets_at) {
-            const mins = Math.max(0, Math.round((new Date(value.resets_at).getTime() - Date.now()) / 60000));
-            const h = Math.floor(mins / 60);
-            const m = mins % 60;
-            const resetDate = new Date(value.resets_at);
-            const now = new Date();
-            const isToday = resetDate.toDateString() === now.toDateString();
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const isTomorrow = resetDate.toDateString() === tomorrow.toDateString();
-            const timeStr = resetDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            let dateTimeStr;
-            if (isToday) {
-              dateTimeStr = timeStr;
-            } else if (isTomorrow) {
-              dateTimeStr = 'tomorrow ' + timeStr;
-            } else {
-              dateTimeStr = resetDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + timeStr;
-            }
-            resetText = ' · resets ' + (h > 0 ? h + 'h ' + m + 'm' : m + 'm') + ' (' + dateTimeStr + ')';
-          }
-
-          const item = document.createElement('div');
-          item.className = 'window-item';
-          item.innerHTML = '<div class="window-header">' +
-            '<span class="window-name">' + formatWindowName(key) + resetText + '</span>' +
-            '<span class="window-util" style="color:' + color + '">' + remaining + '%</span>' +
-            '</div>' +
-            '<div class="progress-bar"><div class="progress-fill ' + colorClass + '" style="width:' + remaining + '%"></div></div>';
-          list.appendChild(item);
+          renderWindowItem(list, {
+            name: formatWindowName(key),
+            percent: Math.round(value.utilization),
+            resetsAt: value.resets_at,
+          });
         }
       }
 
@@ -332,9 +324,128 @@
     }
   }
 
+  function claudeLimitLabel(item) {
+    const modelName = item.scope && item.scope.model && item.scope.model.display_name;
+    if (modelName) return 'Weekly — ' + modelName;
+    if (item.kind === 'session') return 'Session (5h)';
+    if (item.kind === 'weekly_all') return 'Weekly (All Models)';
+    return formatWindowName(item.kind || item.group || 'window');
+  }
+
   function formatWindowName(name) {
     if (!name) return '--';
     return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Shared renderer for a single usage-window row (progress bar + reset time).
+  // `resetsAt` may be an ISO string (Claude) or epoch seconds (Codex).
+  function renderWindowItem(list, { name, percent, resetsAt, severity, inactive }) {
+    const remaining = Math.round(percent);
+    let colorClass, color;
+    if (severity === 'critical') { colorClass = 'progress-red'; color = '#f85149'; }
+    else if (severity === 'warning') { colorClass = 'progress-yellow'; color = '#d29922'; }
+    else if (severity === 'normal') { colorClass = 'progress-green'; color = '#3fb950'; }
+    else {
+      colorClass = remaining >= 85 ? 'progress-red' : remaining >= 50 ? 'progress-yellow' : 'progress-green';
+      color = remaining >= 85 ? '#f85149' : remaining >= 50 ? '#d29922' : '#3fb950';
+    }
+
+    const resetText = formatResetText(resetsAt);
+
+    const item = document.createElement('div');
+    item.className = 'window-item';
+    if (inactive) item.style.opacity = '0.55';
+    item.innerHTML = '<div class="window-header">' +
+      '<span class="window-name">' + name + resetText + '</span>' +
+      '<span class="window-util" style="color:' + color + '">' + remaining + '%</span>' +
+      '</div>' +
+      '<div class="progress-bar"><div class="progress-fill ' + colorClass + '" style="width:' + remaining + '%"></div></div>';
+    list.appendChild(item);
+  }
+
+  // `resetsAt`: ISO string, epoch seconds, epoch ms, or null/undefined.
+  function formatResetText(resetsAt) {
+    if (!resetsAt) return '';
+    const resetMs = typeof resetsAt === 'number'
+      ? (resetsAt < 1e12 ? resetsAt * 1000 : resetsAt)
+      : new Date(resetsAt).getTime();
+    if (!resetMs || Number.isNaN(resetMs)) return '';
+
+    const mins = Math.max(0, Math.round((resetMs - Date.now()) / 60000));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const resetDate = new Date(resetMs);
+    const now = new Date();
+    const isToday = resetDate.toDateString() === now.toDateString();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow = resetDate.toDateString() === tomorrow.toDateString();
+    const timeStr = resetDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    let dateTimeStr;
+    if (isToday) {
+      dateTimeStr = timeStr;
+    } else if (isTomorrow) {
+      dateTimeStr = 'tomorrow ' + timeStr;
+    } else {
+      dateTimeStr = resetDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + timeStr;
+    }
+    return ' · resets ' + (h > 0 ? h + 'h ' + m + 'm' : m + 'm') + ' (' + dateTimeStr + ')';
+  }
+
+  async function loadOpenaiStatus() {
+    try {
+      const res = await fetch('/api/openai/usage');
+      const usage = await res.json();
+      const card = document.getElementById('openai-card');
+      const badge = document.getElementById('openai-badge');
+      const list = document.getElementById('openai-windows-list');
+      list.innerHTML = '';
+
+      if (usage.error || !usage.data) {
+        badge.textContent = usage.error ? 'error' : 'not configured';
+        badge.className = 'status-badge ' + (usage.error ? 'badge-expired' : 'badge-not-configured');
+        card.classList.remove('hidden');
+        document.getElementById('openai-fetched-at').textContent = usage.error || 'Waiting for first poll...';
+        return;
+      }
+
+      badge.textContent = usage.data.rateLimits && usage.data.rateLimits.planType || 'connected';
+      badge.className = 'status-badge badge-valid';
+
+      const byId = usage.data.rateLimitsByLimitId || { codex: usage.data.rateLimits };
+      for (const [limitId, snapshot] of Object.entries(byId)) {
+        if (!snapshot) continue;
+        const label = snapshot.limitName || (limitId === 'codex' ? 'All Models' : formatWindowName(limitId));
+        for (const [slot, window] of [['primary', snapshot.primary], ['secondary', snapshot.secondary]]) {
+          if (!window || typeof window.usedPercent !== 'number') continue;
+          const durationLabel = windowDurationLabel(window.windowDurationMins);
+          renderWindowItem(list, {
+            name: label + ' — ' + durationLabel,
+            percent: window.usedPercent,
+            resetsAt: window.resetsAt,
+          });
+        }
+      }
+
+      if (usage.fetchedAt) {
+        const ago = Math.round((Date.now() - new Date(usage.fetchedAt).getTime()) / 1000);
+        document.getElementById('openai-fetched-at').textContent = 'Updated ' + (ago < 60 ? ago + 's ago' : Math.round(ago / 60) + 'm ago');
+      }
+
+      card.classList.remove('hidden');
+    } catch (err) {
+      // Keep the card hidden rather than surfacing this alongside Claude's alert —
+      // Codex being unreachable shouldn't block the Claude card from rendering.
+      console.error('Failed to load OpenAI usage:', err.message);
+    }
+  }
+
+  function windowDurationLabel(mins) {
+    if (!mins) return 'Window';
+    if (mins <= 360) return 'Session (5h)';
+    if (mins >= 10000) return 'Weekly';
+    if (mins % 1440 === 0) return (mins / 1440) + 'd';
+    return Math.round(mins / 60) + 'h';
   }
 
   function showAuth(show) {
@@ -436,7 +547,9 @@
 
   // Initial load + auto-refresh
   loadStatus();
+  loadOpenaiStatus();
   setInterval(loadStatus, 15000);
+  setInterval(loadOpenaiStatus, 15000);
 </script>
 </body>
 </html>

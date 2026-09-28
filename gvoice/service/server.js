@@ -74,16 +74,21 @@ function fetchGvoice() {
     (err, stdout, stderr) => {
       if (err) {
         let parsed = null;
-        if (stdout) {
+        for (const blob of [stdout, stderr]) {
+          if (!blob) continue;
           try {
-            const j = JSON.parse(stdout);
-            if (j && j.error) parsed = j.error;
+            const j = JSON.parse(blob);
+            if (j && j.error) { parsed = j.error; break; }
           } catch (_) {}
         }
+        const stderrSnippet = (stderr || '').slice(0, 800).trim();
+        const stdoutSnippet = (stdout || '').slice(0, 800).trim();
+        const exitCode = err.code != null ? err.code : null;
+        const signal = err.signal || null;
         lastError = {
           message: parsed
             ? `${parsed.code || 'ERROR'}: ${parsed.message || err.message}`
-            : err.message,
+            : `${err.message} (exit=${exitCode}, signal=${signal})${stderrSnippet ? ` | stderr: ${stderrSnippet}` : ''}${!stderrSnippet && stdoutSnippet ? ` | stdout: ${stdoutSnippet}` : ''}`,
           code: parsed && parsed.code ? parsed.code : null,
           at: new Date().toISOString(),
         };

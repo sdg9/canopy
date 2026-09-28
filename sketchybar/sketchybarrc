@@ -12,6 +12,7 @@ else
   ENABLE_AEROSPACE=true
   ENABLE_EMAIL=true
   ENABLE_CLAUDE_USAGE=true
+  ENABLE_OPENAI_USAGE=true
   ENABLE_SLACK=true
   ENABLE_CALENDAR=true
   ENABLE_MEDIA=true
@@ -33,6 +34,7 @@ load_item email
 load_item slack
 load_item calendar
 load_item claude_usage
+load_item openai_usage
 load_item system
 load_item media
 

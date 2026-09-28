@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawn } = require('child_process');
 
 const PORT = parseInt(process.env.CLAUDE_USAGE_PORT || '7779', 10);
 const BIND = '127.0.0.1';
@@ -437,6 +438,133 @@ function restartPolling() {
 }
 
 // ---------------------------------------------------------------------------
+// OpenAI / Codex usage polling
+// ---------------------------------------------------------------------------
+//
+// ChatGPT's usage backend (chatgpt.com/backend-api/codex/usage) sits behind a
+// Cloudflare bot challenge that a plain HTTP client can't pass. The Codex CLI
+// itself can, so we shell out to its local app-server (JSON-RPC over stdio)
+// and ask it for the same rate-limit snapshot it shows in its own status line.
+
+const CODEX_EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
+
+function resolveCodexEnv() {
+  const extra = CODEX_EXTRA_PATH_DIRS.filter((dir) => fs.existsSync(dir));
+  const currentPath = process.env.PATH || '';
+  const pathParts = new Set(currentPath.split(path.delimiter).filter(Boolean));
+  for (const dir of extra) pathParts.add(dir);
+  return { ...process.env, PATH: [...pathParts].join(path.delimiter) };
+}
+
+function callCodexAppServer() {
+  return new Promise((resolve, reject) => {
+    let proc;
+    try {
+      proc = spawn(process.env.CODEX_BIN || 'codex', ['app-server'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: resolveCodexEnv(),
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    let buffer = '';
+    let settled = false;
+    let stderr = '';
+
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      proc.kill();
+      fn(arg);
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error('codex app-server timed out'));
+    }, 10000);
+
+    proc.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (!line.trim()) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (msg.id === 2) {
+          if (msg.error) {
+            finish(reject, new Error(msg.error.message || 'codex rate-limit read failed'));
+          } else {
+            finish(resolve, msg.result);
+          }
+        }
+      }
+    });
+
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on('error', (err) => {
+      finish(reject, err.code === 'ENOENT' ? new Error('codex CLI not found') : err);
+    });
+
+    proc.on('exit', (code) => {
+      finish(reject, new Error(`codex app-server exited with code ${code}: ${stderr.trim()}`));
+    });
+
+    const send = (obj) => proc.stdin.write(JSON.stringify(obj) + '\n');
+    send({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'claude-usage-api', title: 'claude-usage-api', version: '1.0.0' } },
+    });
+    send({ id: 2, method: 'account/rateLimits/read', params: null });
+  });
+}
+
+let cachedCodexUsage = null;
+let codexLastFetchAt = null;
+let codexError = null;
+let codexPollTimer = null;
+
+async function fetchCodexUsage() {
+  try {
+    const result = await callCodexAppServer();
+    cachedCodexUsage = result;
+    codexLastFetchAt = new Date().toISOString();
+    codexError = null;
+  } catch (err) {
+    codexError = err.message;
+    console.error('Codex usage fetch error:', err.message);
+  }
+}
+
+function startCodexPolling() {
+  if (codexPollTimer) clearInterval(codexPollTimer);
+  const config = readConfig();
+  const interval = config.pollIntervalMs || DEFAULT_POLL_INTERVAL_MS;
+  fetchCodexUsage();
+  codexPollTimer = setInterval(fetchCodexUsage, interval);
+}
+
+function handleOpenaiUsage() {
+  return {
+    data: cachedCodexUsage,
+    fetchedAt: codexLastFetchAt,
+    ageMs: codexLastFetchAt ? Date.now() - new Date(codexLastFetchAt).getTime() : null,
+    error: codexError,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Request body parser
 // ---------------------------------------------------------------------------
 
@@ -553,6 +681,7 @@ function handlePutConfig(body) {
 
   if (pollIntervalMs !== undefined) {
     restartPolling();
+    startCodexPolling();
   }
 
   return { status: 200, body: config };
@@ -617,6 +746,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (pathname === '/api/openai/usage' && method === 'GET') {
+      sendJson(res, 200, handleOpenaiUsage());
+      return;
+    }
+
     if (pathname === '/api/oauth/start' && method === 'POST') {
       sendJson(res, 200, handleOAuthStart());
       return;
@@ -665,4 +799,7 @@ server.listen(PORT, BIND, () => {
   } else {
     console.log('No token configured. Visit http://localhost:' + PORT + ' to authorize.');
   }
+
+  console.log('Starting Codex (OpenAI) usage polling...');
+  startCodexPolling();
 });
